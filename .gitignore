@@ -1,2 +1,5 @@
 .DS_Store
-/code/.idea
+/code/.idea/*
+.idea
+CMakeLists.txt
+cmake-build-debug
