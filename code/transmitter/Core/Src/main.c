@@ -24,6 +24,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <stdio.h>
+#include <math.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -33,7 +34,8 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
+#define SENSOR_INPUT_VOLTAGE 5
+#define THERMISTOR_RESISTANCE 10
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -43,36 +45,61 @@
 
 /* Private variables ---------------------------------------------------------*/
 ADC_HandleTypeDef hadc1;
-DMA_HandleTypeDef hdma_adc1;
+ADC_HandleTypeDef hadc2;
 
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
-uint16_t adc_buffer[2];
+ADC_HandleTypeDef *moistureADC = &hadc1;
+ADC_HandleTypeDef *thermistorADC = &hadc2;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
-static void MX_DMA_Init(void);
 static void MX_ADC1_Init(void);
 static void MX_USART2_UART_Init(void);
+static void MX_ADC2_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-float getVoltage(uint32_t channel) {
-    return adc_buffer[channel]/4095 * 3.3;
+float getVoltage(ADC_HandleTypeDef *adc) {
+	HAL_ADC_Start(adc);
+    HAL_ADC_PollForConversion(adc, HAL_MAX_DELAY);
+    uint16_t reading = HAL_ADC_GetValue(adc);
+    return ((float)reading / 4095) * 3.3;
 }
 
-float getTemp() {
-
+float getTemp(ADC_HandleTypeDef *adc) {
+    /*
+     * uses the voltage divider formula Vout = Vin(R2 / R1 + R2) to isolate R2 (input resistance)
+     * - Vin = 5V
+     * - R1 = 10kOhm
+     *
+     * R2 mapped to a curve of best fit of to get temperature: T = 79.8 - 23.5ln(R2)
+     */
+    float v_out = getVoltage(adc);
+    float resistance = v_out * THERMISTOR_RESISTANCE / (SENSOR_INPUT_VOLTAGE - v_out);
+    float temp = 78.8 - 23.5 * log(resistance);
+    return temp;
 }
 
-float getMoisture() {
-    
+float getMoisture(ADC_HandleTypeDef *adc) {
+    /*
+     * todo: make calibration curve for RH values
+     *
+     */
+	return 0;
+}
+
+void sendVal(float val) {
+    char buffer[50];
+    sprintf(buffer, "%.2f\r\n", val);
+
+    HAL_UART_Transmit(&huart2, (uint8_t*)buffer, strlen(buffer), HAL_MAX_DELAY);
 }
 /* USER CODE END 0 */
 
@@ -105,29 +132,28 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-  MX_DMA_Init();
   MX_ADC1_Init();
   MX_USART2_UART_Init();
+  MX_ADC2_Init();
   /* USER CODE BEGIN 2 */
-  HAL_ADC_Start_DMA(&hadc1, adc_buffer, 2);
-  char thermistor_reading[20];
-  char moisture_reading[20];
+  HAL_ADC_Start(&hadc1);
+  HAL_ADC_Start(&hadc2);
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-    while (1) {
+  while (1)
+  {
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-        uint16_t moisture_val = adc_buffer[0];
-        uint16_t thermistor_val = adc_buffer[1];
-        sprintf(thermistor_reading, "%u\r\n", thermistor_val);
-        sprintf(moisture_reading, "%u\r\n", moisture_val);
-        HAL_UART_Transmit(&huart2, (uint32_t*)thermistor_reading, strlen(thermistor_reading), HAL_MAX_DELAY);
-        HAL_UART_Transmit(&huart2, (uint32_t*)moisture_reading, strlen(moisture_reading), HAL_MAX_DELAY);
-        HAL_Delay(500);
-    }
+	  //float moisture_val = getVoltage(moistureADC);
+	  //sendVal(moisture_val);
+
+      float thermistor_val = getTemp(thermistorADC);
+      sendVal(thermistor_val);
+      HAL_Delay(2000);
+  }
   /* USER CODE END 3 */
 }
 
@@ -225,8 +251,59 @@ static void MX_ADC1_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN ADC1_Init 2 */
-
   /* USER CODE END ADC1_Init 2 */
+
+}
+
+/**
+  * @brief ADC2 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_ADC2_Init(void)
+{
+
+  /* USER CODE BEGIN ADC2_Init 0 */
+
+  /* USER CODE END ADC2_Init 0 */
+
+  ADC_ChannelConfTypeDef sConfig = {0};
+
+  /* USER CODE BEGIN ADC2_Init 1 */
+
+  /* USER CODE END ADC2_Init 1 */
+
+  /** Configure the global features of the ADC (Clock, Resolution, Data Alignment and number of conversion)
+  */
+  hadc2.Instance = ADC2;
+  hadc2.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV4;
+  hadc2.Init.Resolution = ADC_RESOLUTION_12B;
+  hadc2.Init.ScanConvMode = DISABLE;
+  hadc2.Init.ContinuousConvMode = DISABLE;
+  hadc2.Init.DiscontinuousConvMode = DISABLE;
+  hadc2.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
+  hadc2.Init.ExternalTrigConv = ADC_SOFTWARE_START;
+  hadc2.Init.DataAlign = ADC_DATAALIGN_RIGHT;
+  hadc2.Init.NbrOfConversion = 1;
+  hadc2.Init.DMAContinuousRequests = DISABLE;
+  hadc2.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
+  if (HAL_ADC_Init(&hadc2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time.
+  */
+  sConfig.Channel = ADC_CHANNEL_1;
+  sConfig.Rank = 1;
+  sConfig.SamplingTime = ADC_SAMPLETIME_3CYCLES;
+  if (HAL_ADC_ConfigChannel(&hadc2, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN ADC2_Init 2 */
+
+  /* USER CODE END ADC2_Init 2 */
 
 }
 
@@ -260,22 +337,6 @@ static void MX_USART2_UART_Init(void)
   /* USER CODE BEGIN USART2_Init 2 */
 
   /* USER CODE END USART2_Init 2 */
-
-}
-
-/**
-  * Enable DMA controller clock
-  */
-static void MX_DMA_Init(void)
-{
-
-  /* DMA controller clock enable */
-  __HAL_RCC_DMA2_CLK_ENABLE();
-
-  /* DMA interrupt init */
-  /* DMA2_Stream0_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA2_Stream0_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(DMA2_Stream0_IRQn);
 
 }
 
