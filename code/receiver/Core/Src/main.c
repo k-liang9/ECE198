@@ -21,7 +21,9 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include <stdint.h>
+#include <string.h>
+#include <stdio.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -56,7 +58,9 @@ static void MX_USART2_UART_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-
+void receiveData(char* buffer) {
+    HAL_UART_Receive(&huart2, (uint8_t*)buffer, sizeof(buffer), HAL_MAX_DELAY);
+}
 /* USER CODE END 0 */
 
 /**
@@ -92,7 +96,7 @@ int main(void)
   /* USER CODE BEGIN 2 */
 
   /* USER CODE END 2 */
-
+  char dataBuffer[100];
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
@@ -100,6 +104,11 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+    //dataBuffer stores the sensor readings, should be able to directly print to lcd screen
+    receiveData(dataBuffer);
+
+    //debugging todo: delete
+    HAL_UART_Transmit(&huart2, (uint8_t*)dataBuffer, strlen(dataBuffer), HAL_MAX_DELAY);
   }
   /* USER CODE END 3 */
 }
