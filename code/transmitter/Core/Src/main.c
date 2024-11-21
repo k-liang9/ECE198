@@ -89,10 +89,15 @@ float getTemp(ADC_HandleTypeDef *adc) {
 
 float getMoisture(ADC_HandleTypeDef *adc) {
     /*
-     * todo: make calibration curve for RH values
-     *
+     * calibration curve: VWC = 1.954/V_out - 0.907
      */
-	return 0;
+    float v_out = getVoltage(adc);
+    float VWC = 1.954/v_out - 0.907;
+    VWC *= 100;
+    if (VWC < 2) {
+        VWC = 2;
+    }
+	return VWC;
 }
 
 void sendVal(float val) {
@@ -147,8 +152,8 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	  //float moisture_val = getVoltage(moistureADC);
-	  //sendVal(moisture_val);
+	  float moisture_val = getMoisture(moistureADC);
+	  sendVal(moisture_val);
 
       float thermistor_val = getTemp(thermistorADC);
       sendVal(thermistor_val);
