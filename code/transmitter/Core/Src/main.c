@@ -100,9 +100,9 @@ float getMoisture(ADC_HandleTypeDef *adc) {
 	return VWC;
 }
 
-void sendVal(float val) {
-    char buffer[50];
-    sprintf(buffer, "%.2f\r\n", val);
+void sendReadings(float temp, float moisture) {
+    char buffer[100];
+    sprintf(buffer, "tmp: %.2f˚C\nVWC: %.2f%%\r\n", temp, moisture);
 
     HAL_UART_Transmit(&huart2, (uint8_t*)buffer, strlen(buffer), HAL_MAX_DELAY);
 }
@@ -153,10 +153,9 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
 	  float moisture_val = getMoisture(moistureADC);
-	  sendVal(moisture_val);
 
       float thermistor_val = getTemp(thermistorADC);
-      sendVal(thermistor_val);
+      sendReadings(thermistor_val, moisture_val);
       HAL_Delay(2000);
   }
   /* USER CODE END 3 */
