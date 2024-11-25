@@ -34,6 +34,8 @@
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 #define SLAVE_ADDRESS_LCD 0x27
+//#define LCD_DEBUG
+//#define NOT_CONNECTED
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -66,14 +68,16 @@ static void MX_I2C1_Init(void);
 #define DATA_SIZE 30
 char dataBuffer[DATA_SIZE];
 void receiveData(char* buffer) {
-    char data[30];
     HAL_StatusTypeDef status = HAL_UART_Receive(&huart1, (uint8_t*)buffer, DATA_SIZE, 15000);
+#ifdef NOT_CONNECTED
     if (status == HAL_OK) {
         HAL_UART_Transmit(&huart2, (uint8_t*)buffer, strlen(buffer), HAL_MAX_DELAY);
     } else {
+        char data[30];
         sprintf(data, "HAL_UART_Receive error: %d\r\n", status);
         HAL_UART_Transmit(&huart2, (uint8_t*)data, strlen(data), HAL_MAX_DELAY);
     }
+#endif
 }
 
 char tmp[16];
@@ -112,6 +116,7 @@ void lcd_send_cmd (char cmd) {
     HAL_StatusTypeDef status = HAL_I2C_Master_Transmit(&hi2c1, SLAVE_ADDRESS_LCD << 1, (uint8_t *)data_t, 4, 100);
 
     // Debug message
+#ifdef LCD_DEBUG
     if (status != HAL_OK) {
         char data[50];
         sprintf(data, "I2C Error: %d during cmd: 0x%02X\r\n", status, cmd);
@@ -121,6 +126,7 @@ void lcd_send_cmd (char cmd) {
         sprintf(data, "I2C Success: cmd: 0x%02X\r\n", cmd);
         HAL_UART_Transmit(&huart2, (uint8_t*)data, strlen(data), HAL_MAX_DELAY);
     }
+#endif
 }
 
 void lcd_send_data (char data) {
@@ -136,6 +142,7 @@ void lcd_send_data (char data) {
     HAL_StatusTypeDef status = HAL_I2C_Master_Transmit(&hi2c1, SLAVE_ADDRESS_LCD << 1, (uint8_t *)data_t, 4, 100);
 
     // Debug message
+#ifdef LCD_DEBUG
     if (status != HAL_OK) {
         char debug_data[50];
         sprintf(debug_data, "I2C Error: %d during data: 0x%02X\r\n", status, data);
@@ -145,6 +152,7 @@ void lcd_send_data (char data) {
         sprintf(debug_data, "I2C Success: data: 0x%02X\r\n", data);
         HAL_UART_Transmit(&huart2, (uint8_t*)debug_data, strlen(debug_data), HAL_MAX_DELAY);
     }
+#endif
 }
 
 void lcd_init (void) {
@@ -171,9 +179,11 @@ void lcd_init (void) {
     lcd_send_cmd (0x0C); //Display on/off control --> D = 1, C and B = 0. (Cursor and blink, last two bits)
 
     // Debug message
+#ifdef LCD_DEBUG
     char data[30];
     sprintf(data, "LCD Initialized\r\n");
     HAL_UART_Transmit(&huart2, (uint8_t*)data, strlen(data), HAL_MAX_DELAY);
+#endif
 }
 
 void lcd_send_string (char *str) {
@@ -228,7 +238,7 @@ int main(void)
   MX_USART1_UART_Init();
   MX_I2C1_Init();
   /* USER CODE BEGIN 2 */
-    lcd_init();
+  lcd_init();
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -239,12 +249,16 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
     //dataBuffer stores the sensor readings, should be able to directly print to lcd screen
-//    receiveData(dataBuffer);
-//    translate(buffer, tmp, VWC);
-      lcd_put_cur(0, 0);
-      lcd_send_string ("HELLO WORLD");
-      lcd_put_cur(1, 0);
-      lcd_send_string("from CTECH");
+    receiveData(dataBuffer);
+    translate(dataBuffer, tmp, VWC);
+    //HAL_UART_Transmit(&huart2, (uint8_t*)dataBuffer, strlen(dataBuffer), HAL_MAX_DELAY);
+    HAL_UART_Transmit(&huart2, (uint8_t*)tmp, strlen(dataBuffer), HAL_MAX_DELAY);
+    HAL_UART_Transmit(&huart2, (uint8_t*)VWC, strlen(dataBuffer), HAL_MAX_DELAY);
+
+    lcd_put_cur(0, 0);
+    lcd_send_string (tmp);
+    lcd_put_cur(1, 0);
+    lcd_send_string(VWC);
 
     HAL_Delay(2000);
   }
