@@ -42,6 +42,7 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
+UART_HandleTypeDef huart1;
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
@@ -52,15 +53,34 @@ UART_HandleTypeDef huart2;
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_USART2_UART_Init(void);
+static void MX_USART1_UART_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+#define DATA_SIZE 30
+char dataBuffer[DATA_SIZE];
 void receiveData(char* buffer) {
-    HAL_UART_Receive(&huart2, (uint8_t*)buffer, sizeof(buffer), HAL_MAX_DELAY);
+    char data[30];
+    HAL_StatusTypeDef status = HAL_UART_Receive(&huart1, (uint8_t*)buffer, DATA_SIZE, 15000);
+    if (status == HAL_OK) {
+        HAL_UART_Transmit(&huart2, (uint8_t*)buffer, strlen(buffer), HAL_MAX_DELAY);
+    } else {
+        sprintf(data, "HAL_UART_Receive error: %d\r\n", status);
+        HAL_UART_Transmit(&huart2, (uint8_t*)data, strlen(data), HAL_MAX_DELAY);
+    }
 }
+
+//uint16_t rxLength=0;
+//void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size) {
+//    HAL_UART_Transmit(&huart2, (uint8_t*)dataBuffer, rxLength, HAL_MAX_DELAY);
+//
+//    if (HAL_UARTEx_ReceiveToIdle(huart, (uint8_t*)dataBuffer, DATA_SIZE, &rxLength, HAL_MAX_DELAY) != HAL_OK) {
+//        Error_Handler();
+//    }
+//}
 /* USER CODE END 0 */
 
 /**
@@ -93,10 +113,13 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_USART2_UART_Init();
+  MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
-
+//    if (HAL_UARTEx_ReceiveToIdle(&huart2, (uint8_t*)dataBuffer, DATA_SIZE, &rxLength, 4000) != HAL_OK) {
+//        Error_Handler();
+//    }
   /* USER CODE END 2 */
-  char dataBuffer[100];
+
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
@@ -106,9 +129,9 @@ int main(void)
     /* USER CODE BEGIN 3 */
     //dataBuffer stores the sensor readings, should be able to directly print to lcd screen
     receiveData(dataBuffer);
+    //HAL_UARTEx_ReceiveToIdle(&huart4, (uint8_t*)dataBuffer, DATA_SIZE, &rxLength, HAL_MAX_DELAY);
 
-    //debugging todo: delete
-    HAL_UART_Transmit(&huart2, (uint8_t*)dataBuffer, strlen(dataBuffer), HAL_MAX_DELAY);
+    HAL_Delay(2000);
   }
   /* USER CODE END 3 */
 }
@@ -158,6 +181,39 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
+}
+
+/**
+  * @brief USART1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_USART1_UART_Init(void)
+{
+
+  /* USER CODE BEGIN USART1_Init 0 */
+
+  /* USER CODE END USART1_Init 0 */
+
+  /* USER CODE BEGIN USART1_Init 1 */
+
+  /* USER CODE END USART1_Init 1 */
+  huart1.Instance = USART1;
+  huart1.Init.BaudRate = 9600;
+  huart1.Init.WordLength = UART_WORDLENGTH_8B;
+  huart1.Init.StopBits = UART_STOPBITS_1;
+  huart1.Init.Parity = UART_PARITY_NONE;
+  huart1.Init.Mode = UART_MODE_TX_RX;
+  huart1.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  huart1.Init.OverSampling = UART_OVERSAMPLING_16;
+  if (HAL_UART_Init(&huart1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN USART1_Init 2 */
+
+  /* USER CODE END USART1_Init 2 */
+
 }
 
 /**
@@ -245,6 +301,9 @@ void Error_Handler(void)
   __disable_irq();
   while (1)
   {
+      char data[30];
+      sprintf(data, "error\r\n");
+      HAL_UART_Transmit(&huart2, (uint8_t*)data, strlen(data), HAL_MAX_DELAY);
   }
   /* USER CODE END Error_Handler_Debug */
 }

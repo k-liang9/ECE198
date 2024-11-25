@@ -47,6 +47,7 @@
 ADC_HandleTypeDef hadc1;
 ADC_HandleTypeDef hadc2;
 
+UART_HandleTypeDef huart1;
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
@@ -60,6 +61,7 @@ static void MX_GPIO_Init(void);
 static void MX_ADC1_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_ADC2_Init(void);
+static void MX_USART1_UART_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -101,10 +103,16 @@ float getMoisture(ADC_HandleTypeDef *adc) {
 }
 
 void sendReadings(float temp, float moisture) {
-    char buffer[100];
-    sprintf(buffer, "tmp: %.2f˚C\nVWC: %.2f%%\r\n", temp, moisture);
+    char buffer[30];
+    sprintf(buffer, "tmp: %.2f˚C\r\nVWC: %.2f%%\r\n", temp, moisture);
+    HAL_UART_Transmit(&huart1, (uint8_t*)buffer, strlen(buffer), HAL_MAX_DELAY);
 
-    HAL_UART_Transmit(&huart2, (uint8_t*)buffer, strlen(buffer), HAL_MAX_DELAY);
+    //uint16_t index = 0;
+//    while (buffer[index] != '\0') {
+//        HAL_UART_Transmit(&huart1, (uint8_t*)&buffer[index], 1, HAL_MAX_DELAY);
+//        index++;
+//        HAL_Delay(500);
+//    }
 }
 /* USER CODE END 0 */
 
@@ -140,6 +148,7 @@ int main(void)
   MX_ADC1_Init();
   MX_USART2_UART_Init();
   MX_ADC2_Init();
+  MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
   HAL_ADC_Start(&hadc1);
   HAL_ADC_Start(&hadc2);
@@ -156,7 +165,7 @@ int main(void)
 
       float thermistor_val = getTemp(thermistorADC);
       sendReadings(thermistor_val, moisture_val);
-      HAL_Delay(2000);
+      HAL_Delay(3000);
   }
   /* USER CODE END 3 */
 }
@@ -308,6 +317,39 @@ static void MX_ADC2_Init(void)
   /* USER CODE BEGIN ADC2_Init 2 */
 
   /* USER CODE END ADC2_Init 2 */
+
+}
+
+/**
+  * @brief USART1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_USART1_UART_Init(void)
+{
+
+  /* USER CODE BEGIN USART1_Init 0 */
+
+  /* USER CODE END USART1_Init 0 */
+
+  /* USER CODE BEGIN USART1_Init 1 */
+
+  /* USER CODE END USART1_Init 1 */
+  huart1.Instance = USART1;
+  huart1.Init.BaudRate = 9600;
+  huart1.Init.WordLength = UART_WORDLENGTH_8B;
+  huart1.Init.StopBits = UART_STOPBITS_1;
+  huart1.Init.Parity = UART_PARITY_NONE;
+  huart1.Init.Mode = UART_MODE_TX_RX;
+  huart1.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  huart1.Init.OverSampling = UART_OVERSAMPLING_16;
+  if (HAL_UART_Init(&huart1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN USART1_Init 2 */
+
+  /* USER CODE END USART1_Init 2 */
 
 }
 
