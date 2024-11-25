@@ -33,7 +33,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
+#define SLAVE_ADDRESS_LCD 0x27
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -42,6 +42,8 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
+I2C_HandleTypeDef hi2c1;
+
 UART_HandleTypeDef huart1;
 UART_HandleTypeDef huart2;
 
@@ -54,6 +56,7 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_USART1_UART_Init(void);
+static void MX_I2C1_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -73,14 +76,123 @@ void receiveData(char* buffer) {
     }
 }
 
-//uint16_t rxLength=0;
-//void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size) {
-//    HAL_UART_Transmit(&huart2, (uint8_t*)dataBuffer, rxLength, HAL_MAX_DELAY);
-//
-//    if (HAL_UARTEx_ReceiveToIdle(huart, (uint8_t*)dataBuffer, DATA_SIZE, &rxLength, HAL_MAX_DELAY) != HAL_OK) {
-//        Error_Handler();
-//    }
-//}
+char tmp[16];
+char VWC[16];
+void translate(char* buffer, char* tmp, char* VWC) {
+    int bufferIndex = 0;
+    int tmpIndex = 0;
+    while (dataBuffer[bufferIndex] != '\r' && dataBuffer[bufferIndex] != '\0') {
+        tmp[tmpIndex] = dataBuffer[bufferIndex];
+        tmpIndex++;
+        bufferIndex++;
+    }
+    tmp[tmpIndex] = '\0';
+    bufferIndex += 2;
+
+    int VWCIndex = 0;
+    while(dataBuffer[bufferIndex] != '\r' && dataBuffer[bufferIndex] != '\0') {
+        VWC[VWCIndex] = dataBuffer[bufferIndex];
+        VWCIndex++;
+        bufferIndex++;
+    }
+}
+
+
+//lcd1602 with i2c module
+void lcd_send_cmd (char cmd) {
+    char data_u, data_l;
+    data_u = (cmd & 0xf0);
+    data_l = ((cmd << 4) & 0xf0);
+    uint8_t data_t[4];
+    data_t[0] = data_u|0x0C;  // en=1, rs=0 -> bxxxx1100
+    data_t[1] = data_u|0x08;  // en=0, rs=0 -> bxxxx1000
+    data_t[2] = data_l|0x0C;  // en=1, rs=0 -> bxxxx1100
+    data_t[3] = data_l|0x08;  // en=0, rs=0 -> bxxxx1000
+
+    HAL_StatusTypeDef status = HAL_I2C_Master_Transmit(&hi2c1, SLAVE_ADDRESS_LCD << 1, (uint8_t *)data_t, 4, 100);
+
+    // Debug message
+    if (status != HAL_OK) {
+        char data[50];
+        sprintf(data, "I2C Error: %d during cmd: 0x%02X\r\n", status, cmd);
+        HAL_UART_Transmit(&huart2, (uint8_t*)data, strlen(data), HAL_MAX_DELAY);
+    } else {
+        char data[50];
+        sprintf(data, "I2C Success: cmd: 0x%02X\r\n", cmd);
+        HAL_UART_Transmit(&huart2, (uint8_t*)data, strlen(data), HAL_MAX_DELAY);
+    }
+}
+
+void lcd_send_data (char data) {
+    char data_u, data_l;
+    uint8_t data_t[4];
+    data_u = (data & 0xf0);
+    data_l = ((data << 4) & 0xf0);
+    data_t[0] = data_u | 0x0D;  // en=1, rs=1 -> bxxxx1101
+    data_t[1] = data_u | 0x09;  // en=0, rs=1 -> bxxxx1001
+    data_t[2] = data_l | 0x0D;  // en=1, rs=1 -> bxxxx1101
+    data_t[3] = data_l | 0x09;  // en=0, rs=1 -> bxxxx1001
+
+    HAL_StatusTypeDef status = HAL_I2C_Master_Transmit(&hi2c1, SLAVE_ADDRESS_LCD << 1, (uint8_t *)data_t, 4, 100);
+
+    // Debug message
+    if (status != HAL_OK) {
+        char debug_data[50];
+        sprintf(debug_data, "I2C Error: %d during data: 0x%02X\r\n", status, data);
+        HAL_UART_Transmit(&huart2, (uint8_t*)debug_data, strlen(debug_data), HAL_MAX_DELAY);
+    } else {
+        char debug_data[50];
+        sprintf(debug_data, "I2C Success: data: 0x%02X\r\n", data);
+        HAL_UART_Transmit(&huart2, (uint8_t*)debug_data, strlen(debug_data), HAL_MAX_DELAY);
+    }
+}
+
+void lcd_init (void) {
+    // 4 bit initialisation
+    HAL_Delay(100);  // wait for >40ms
+    lcd_send_cmd (0x30);
+    HAL_Delay(10);  // wait for >4.1ms
+    lcd_send_cmd (0x30);
+    HAL_Delay(5);  // wait for >100us
+    lcd_send_cmd (0x30);
+    HAL_Delay(20);
+    lcd_send_cmd (0x20);  // 4bit mode
+    HAL_Delay(20);
+
+    // display initialisation
+    lcd_send_cmd (0x28); // Function set --> DL=0 (4 bit mode), N = 1 (2 line display) F = 0 (5x8 characters)
+    HAL_Delay(5);
+    lcd_send_cmd (0x08); //Display on/off control --> D=0,C=0, B=0  ---> display off
+    HAL_Delay(5);
+    lcd_send_cmd (0x01);  // clear display
+    HAL_Delay(10);
+    lcd_send_cmd (0x06); //Entry mode set --> I/D = 1 (increment cursor) & S = 0 (no shift)
+    HAL_Delay(5);
+    lcd_send_cmd (0x0C); //Display on/off control --> D = 1, C and B = 0. (Cursor and blink, last two bits)
+
+    // Debug message
+    char data[30];
+    sprintf(data, "LCD Initialized\r\n");
+    HAL_UART_Transmit(&huart2, (uint8_t*)data, strlen(data), HAL_MAX_DELAY);
+}
+
+void lcd_send_string (char *str) {
+    while (*str) lcd_send_data (*str++);
+}
+
+void lcd_put_cur(int row, int col) {
+    switch (row)
+    {
+        case 0:
+            col |= 0x80;
+            break;
+        case 1:
+            col |= 0xC0;
+            break;
+    }
+    lcd_send_cmd (col);
+}
+
 /* USER CODE END 0 */
 
 /**
@@ -114,10 +226,9 @@ int main(void)
   MX_GPIO_Init();
   MX_USART2_UART_Init();
   MX_USART1_UART_Init();
+  MX_I2C1_Init();
   /* USER CODE BEGIN 2 */
-//    if (HAL_UARTEx_ReceiveToIdle(&huart2, (uint8_t*)dataBuffer, DATA_SIZE, &rxLength, 4000) != HAL_OK) {
-//        Error_Handler();
-//    }
+    lcd_init();
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -128,8 +239,12 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
     //dataBuffer stores the sensor readings, should be able to directly print to lcd screen
-    receiveData(dataBuffer);
-    //HAL_UARTEx_ReceiveToIdle(&huart4, (uint8_t*)dataBuffer, DATA_SIZE, &rxLength, HAL_MAX_DELAY);
+//    receiveData(dataBuffer);
+//    translate(buffer, tmp, VWC);
+      lcd_put_cur(0, 0);
+      lcd_send_string ("HELLO WORLD");
+      lcd_put_cur(1, 0);
+      lcd_send_string("from CTECH");
 
     HAL_Delay(2000);
   }
@@ -181,6 +296,40 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
+}
+
+/**
+  * @brief I2C1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_I2C1_Init(void)
+{
+
+  /* USER CODE BEGIN I2C1_Init 0 */
+
+  /* USER CODE END I2C1_Init 0 */
+
+  /* USER CODE BEGIN I2C1_Init 1 */
+
+  /* USER CODE END I2C1_Init 1 */
+  hi2c1.Instance = I2C1;
+  hi2c1.Init.ClockSpeed = 100000;
+  hi2c1.Init.DutyCycle = I2C_DUTYCYCLE_2;
+  hi2c1.Init.OwnAddress1 = 0;
+  hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
+  hi2c1.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
+  hi2c1.Init.OwnAddress2 = 0;
+  hi2c1.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
+  hi2c1.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
+  if (HAL_I2C_Init(&hi2c1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN I2C1_Init 2 */
+
+  /* USER CODE END I2C1_Init 2 */
+
 }
 
 /**

@@ -106,13 +106,6 @@ void sendReadings(float temp, float moisture) {
     char buffer[30];
     sprintf(buffer, "tmp: %.2f˚C\r\nVWC: %.2f%%\r\n", temp, moisture);
     HAL_UART_Transmit(&huart1, (uint8_t*)buffer, strlen(buffer), HAL_MAX_DELAY);
-
-    //uint16_t index = 0;
-//    while (buffer[index] != '\0') {
-//        HAL_UART_Transmit(&huart1, (uint8_t*)&buffer[index], 1, HAL_MAX_DELAY);
-//        index++;
-//        HAL_Delay(500);
-//    }
 }
 /* USER CODE END 0 */
 
